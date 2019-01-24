@@ -11,6 +11,7 @@ const PSK_2_IDENTIFIER = 'interledger-psk2'
 const STREAM_IDENTIFIER = 'interledger-stream'
 const handlePsk2Request = require('./src/psk2')
 const handleStreamRequest = require('./src/stream')
+const handlePullRequest = require('./src/pull')
 
 async function ilpFetch (url, _opts) {
   // Generate the payment token to go along with our requests
@@ -37,49 +38,67 @@ async function ilpFetch (url, _opts) {
   }
 
   const maxPrice = opts.maxPrice
-  const plugin = opts.plugin || require('ilp-plugin')()
-
   if (!maxPrice) {
     throw new Error('opts.maxPrice must be specified on paid request')
   }
 
-  // Parse the `Pay` header to determine how to pay the receiver. A handler is
-  // selected by checking what the payment method is.
-  const [ payMethod, ...payParams ] = firstTry.headers.get('Pay').split(' ')
-  log.trace('parsed `Pay` header. method=' + payMethod, 'params=', payParams)
+  if (firstTry.headers.get('Pay')) {
+    const plugin = opts.plugin || require('ilp-plugin')()
 
-  let handler
-  switch (payMethod) {
-    case PSK_2_IDENTIFIER:
-      log.trace('using PSK2 handler.')
-      handler = handlePsk2Request
-      break
+    // Parse the `Pay` header to determine how to pay the receiver. A handler is
+    // selected by checking what the payment method is.
+    const [ payMethod, ...payParams ] = firstTry.headers.get('Pay').split(' ')
+    log.trace('parsed `Pay` header. method=' + payMethod, 'params=', payParams)
 
-    case STREAM_IDENTIFIER:
-      log.trace('using STREAM handler.')
-      handler = handleStreamRequest
-      break
+    let handler
+    switch (payMethod) {
+      case PSK_2_IDENTIFIER:
+        log.trace('using PSK2 handler.')
+        handler = handlePsk2Request
+        break
 
-    case PSK_IDENTIFIER:
-      log.warn('PSK1 is no longer supported. use `superagent-ilp` for legacy PSK.')
-    default:
-      log.error('no handler exists for payment method. method=' + payMethod)
-      throw new Error('unsupported payment method in `Pay`. ' +
-        'header=' + firstTry.headers.get('Pay'))
+      case STREAM_IDENTIFIER:
+        log.trace('using STREAM handler.')
+        handler = handleStreamRequest
+        break
+
+      case PSK_IDENTIFIER:
+        log.warn('PSK1 is no longer supported. use `superagent-ilp` for legacy PSK.')
+      default:
+        log.error('no handler exists for payment method. method=' + payMethod)
+        throw new Error('unsupported payment method in `Pay`. ' +
+          'header=' + firstTry.headers.get('Pay'))
+    }
+
+    log.trace('connecting plugin')
+    await plugin.connect()
+
+    log.trace('calling handler.')
+    const result = await handler({ firstTry, url, opts, payParams, plugin, payToken })
+
+    // clean up the plugin if ilp-fetch created it
+    if (!opts.plugin) {
+      await plugin.disconnect()
+    }
+
+    return result
+  } else if (firstTry.headers.get('Pay-Accept') === 'interledger-pull') {
+    const pointerSpecs = JSON.parse(firstTry.header.get('Pull-Pointer'))
+
+    if (!opts.pullServerURL) {
+      throw new Error('opts.pullServerURL must be specified on paid request')
+    }
+
+    if (!opts.pullServerSecret) {
+      throw new Error('opts.pullServerSecret must be specified on paid request')
+    }
+
+    if (pointerSpecs.total > maxPrice) {
+      throw new Error('opts.max Price is too little to set up pull pointer')
+    }
+    const result = await handlePullRequest(pointerSpecs, url, opts)
+    return result
   }
-
-  log.trace('connecting plugin')
-  await plugin.connect()
-
-  log.trace('calling handler.')
-  const result = await handler({ firstTry, url, opts, payParams, plugin, payToken })
-
-  // clean up the plugin if ilp-fetch created it
-  if (!opts.plugin) {
-    await plugin.disconnect()
-  }
-
-  return result
 }
 
 module.exports = ilpFetch
