@@ -83,7 +83,7 @@ async function ilpFetch (url, _opts) {
 
     return result
   } else if (firstTry.headers.get('Pay-Accept') === 'interledger-pull') {
-    const pointerSpecs = JSON.parse(firstTry.header.get('Pull-Pointer'))
+    const pointerSpecs = JSON.parse(firstTry.headers.get('Pull-Pointer'))
 
     if (!opts.pullServerURL) {
       throw new Error('opts.pullServerURL must be specified on paid request')
