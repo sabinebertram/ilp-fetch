@@ -18,6 +18,18 @@ async function ilpFetch (url, _opts) {
   const payToken = _opts.payToken || crypto.randomBytes(16)
   const payTokenText = base64url(payToken)
 
+  const codiusdOpts = {
+    maxPrice: _opts.maxPrice,
+    method: _opts.method,
+    body: _opts.body,
+    timeout: _opts.timeout
+  }
+
+  const spspOpts = {
+    pullServerURL: _opts.pullServerURL,
+    pullServerSecret: _opts.pullServerSecret
+  }
+
   // Add the payment token to the headers
   const headers = Object.assign({},
     (_opts.headers || {}),
@@ -26,7 +38,7 @@ async function ilpFetch (url, _opts) {
   // Make the request for the first time---if the endpoint is paid, this will
   // fail.
   log.info('attempting http request. url=' + url, 'opts=', _opts)
-  const opts = Object.assign({}, _opts, { headers })
+  const opts = Object.assign({}, codiusdOpts, { headers })
   const firstTry = await fetch(url, opts)
 
   // If the request succeeded, just return the result. Keep going if payment is
@@ -85,18 +97,18 @@ async function ilpFetch (url, _opts) {
   } else if (firstTry.headers.get('Pay-Accept') === 'interledger-pull') {
     const pointerSpecs = JSON.parse(firstTry.headers.get('Pull-Pointer'))
 
-    if (!opts.pullServerURL) {
-      throw new Error('opts.pullServerURL must be specified on paid request')
+    if (!spspOpts.pullServerURL) {
+      throw new Error('pullServerURL must be specified on paid request')
     }
 
-    if (!opts.pullServerSecret) {
-      throw new Error('opts.pullServerSecret must be specified on paid request')
+    if (!spspOpts.pullServerSecret) {
+      throw new Error('pullServerSecret must be specified on paid request')
     }
 
     if (pointerSpecs.total > maxPrice) {
       throw new Error('opts.max Price is too little to set up pull pointer')
     }
-    const result = await handlePullRequest(pointerSpecs, url, opts)
+    const result = await handlePullRequest(pointerSpecs, url, opts, spspOpts)
     return result
   }
 }

@@ -1,9 +1,9 @@
 const fetch = require('node-fetch')
 
-async function requestPullPointer (pullPointerSpecs, url, opts) {
+async function requestPullPointer (pullPointerSpecs, url, opts, spspOpts) {
   const response = await fetch(
-    opts.pullServerURL,
-    { method: 'POST', body: JSON.stringify(pullPointerSpecs), headers: { 'Authorization': 'Bearer ' + opts.pullServerSecret, 'Content-Type': 'application/json' } }
+    spspOpts.pullServerURL,
+    { method: 'POST', body: JSON.stringify(pullPointerSpecs), headers: { 'Authorization': 'Bearer ' + spspOpts.pullServerSecret, 'Content-Type': 'application/json' } }
   )
   if (response.status === 200) {
     const parse = await response.json()
