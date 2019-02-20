@@ -1,18 +1,11 @@
 const fetch = require('node-fetch')
+const jwt = require('jsonwebtoken')
 
-async function requestPullPointer (pullPointerSpecs, url, opts, spspOpts) {
-  const response = await fetch(
-    spspOpts.pullServerURL,
-    { method: 'POST', body: JSON.stringify(pullPointerSpecs), headers: { 'Authorization': 'Bearer ' + spspOpts.pullServerSecret, 'Content-Type': 'application/json' } }
-  )
-  if (response.status === 200) {
-    const parse = await response.json()
-    const pullPointer = parse['token']
-    const result = await fetch(url + '&pullPointer=' + pullPointer, opts)
-    return result
-  } else {
-    throw new Error('could not create pull pointer, response status: ' + response.status)
-  }
+async function handlePullRequest (pullPointerSpecs, url, opts, spspOpts) {
+  const token = jwt.sign(pullPointerSpecs, spspOpts.pullServerSecret)
+  const pointer = `${spspOpts.pullServerURL}/${token}`
+  const result = await fetch(url + '&pullPointer=' + pointer, opts)
+  return result
 }
 
-module.exports = requestPullPointer
+module.exports = handlePullRequest
